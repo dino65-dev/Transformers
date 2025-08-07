@@ -158,8 +158,8 @@ print(generated)
 
 **Performance Metrics:**
 Example training progression:
-- Epoch 1: Average Loss ~6.0 (starting from ~10.3)
-- Subsequent epochs: Convergence to ~4.0-5.0 range
+- Epoch 1: Average Loss ~5.0 (starting from ~10.3)
+- Subsequent epochs: Convergence to ~3.0-4.0 range
 
 ### Training Loss Progression
 
