@@ -87,6 +87,7 @@ print(generated)
 - **Monitoring**: WandB for real-time loss graphs and metrics
 
 Example loss progression from a sample run:
+![](https://github.com/dino65-dev/Transformers/blob/main/Screenshot%202025-08-01%20214849.png)
 - Epoch 1: Avg Loss ~6.0 (starting from ~10.3)
 - Further epochs show convergence to ~4.0-5.0
 
