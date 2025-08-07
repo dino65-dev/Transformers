@@ -1,7 +1,6 @@
 # Transformers: A Custom Implementation of Decoder-Only Transformer Models
 
-![Transformer Architecture](https://img.shields.io/badge](https://img.shields.io/badge](https://img.shields.io/badge Overview
-
+Overview :
 This repository contains a custom implementation of decoder-only transformer models, inspired by modern architectures like GPT. It includes code for training conversational AI models on datasets like LMSYS-Chat-1M, with features such as Grouped Query Attention (GQA), Rotary Positional Embeddings (RoPE), and RMSNorm. The project demonstrates end-to-end training from scratch, including data preparation, model building, and optimization techniques like mixed precision.
 
 As a student project built in Kolkata, this repo showcases practical AI development on limited resources. It's designed for educational purposes, experimentation, and as a starting point for building chatbots or language models.
