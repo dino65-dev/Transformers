@@ -4,7 +4,7 @@
 
 This repository contains a custom implementation of decoder-only transformer models, inspired by modern architectures like GPT. It includes comprehensive code for training conversational AI models on datasets like LMSYS-Chat-1M, featuring advanced techniques such as Grouped Query Attention (GQA), Rotary Positional Embeddings (RoPE), and RMSNorm.
 
-The implementation demonstrates end-to-end training from scratch, including data preparation, model building, and optimization techniques like mixed precision training. This repository is designed for researchers, developers, and practitioners interested in understanding and implementing transformer architectures for conversational AI applications.
+The implementation demonstrates end-to-end training from scratch, including data preparation, model building, and optimization techniques like mixed precision training. With a flexible command-line interface, users can easily configure model architecture, training parameters, and dataset choices without code modifications. This repository is designed for researchers, developers, and practitioners interested in understanding and implementing transformer architectures for conversational AI applications.
 
 ## Key Features
 
@@ -12,7 +12,8 @@ The implementation demonstrates end-to-end training from scratch, including data
 - **Custom tokenizer support** - Compatible with BPE tokenizers (e.g., 32K vocabulary)
 - **Efficient training** - Mixed precision training with gradient clipping
 - **Monitoring integration** - WandB support for tracking loss and metrics
-- **Flexible configuration** - Easily customizable model parameters
+- **Flexible configuration** - Command-line interface for model parameters and dataset selection
+- **Dataset flexibility** - Support for various HuggingFace datasets with customizable configurations
 
 ## Installation
 
@@ -45,31 +46,76 @@ The implementation demonstrates end-to-end training from scratch, including data
 
 ## Usage
 
-### Model Training
+### Model Training via Command Line
 
-The main training implementation is available in `model_train.ipynb` and `test-ng.ipynb`. The training pipeline handles:
-
-- Loading and preprocessing conversational datasets
-- Building the transformer model architecture
-- Training with customizable hyperparameters
-- Automatic checkpointing and logging
-
-Example training command (adapt paths as needed):
+Train models directly from the command line with extensive configuration options:
 
 ```bash
-python train.py --dataset_path /path/to/lmsys-chat-1m --epochs 5 --batch_size 8 --lr 3e-4 --use_wandb True
+python train/train.py \
+  --d_model 768 \
+  --num_layers 10 \
+  --num_heads 12 \
+  --kv_heads 4 \
+  --d_ff 2048 \
+  --dropout 0.1 \
+  --seq_len 2048 \
+  --epochs 5 \
+  --batch_size 6 \
+  --lr 3e-4 \
+  --checkpoint_dir "./checkpoints" \
+  --dataset_name "lmsys/lmsys-chat-1m" \
+  --dataset_subset 10000
 ```
 
-**Key Arguments:**
-- `--epochs`: Number of training epochs (default: 5)
-- `--batch_size`: Batch size (default: 8; adjust based on GPU memory)
-- `--lr`: Learning rate (default: 3e-4)
-- `--use_wandb`: Enable WandB logging (requires wandb login)
+#### Core Training Parameters
 
-**Training Features:**
-- Loss logging every 5 batches
-- Automatic checkpointing every 2 hours and at epoch completion
-- Real-time monitoring via WandB (loss curves, GPU utilization, etc.)
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `--d_model` | Model dimension | 768 |
+| `--num_layers` | Number of transformer layers | 10 |
+| `--num_heads` | Number of attention heads | 12 |
+| `--kv_heads` | Number of key-value heads (GQA) | 4 |
+| `--dropout` | Dropout rate | 0.1 |
+| `--epochs` | Training epochs | 5 |
+| `--batch_size` | Batch size | 6 |
+| `--lr` | Learning rate | 3e-4 |
+
+#### Dataset Configuration
+
+Choose from any dataset on HuggingFace or use your own:
+
+```bash
+# Using EleutherAI/pile dataset
+python train/train.py --dataset_name "EleutherAI/pile" --dataset_config "all" --dataset_subset 10000
+
+# Using Alpaca dataset
+python train/train.py --dataset_name "tatsu-lab/alpaca" --dataset_split "train" 
+```
+
+Dataset parameters:
+- `--dataset_name`: Name of dataset on HuggingFace or path to local dataset
+- `--dataset_config`: Configuration name for the dataset (if applicable)
+- `--dataset_split`: Dataset split to use (default: "train")
+- `--dataset_subset`: Number of examples to use (limit dataset size)
+
+#### WandB Integration
+
+Enable or disable WandB logging:
+
+```bash
+# Enable WandB with custom project and run name
+python train/train.py --project_name "my-transformer" --run_name "experiment-1"
+
+# Disable WandB
+python train/train.py --no_wandb
+```
+
+### Training Features
+
+- Automatic checkpointing every 2 hours
+- Best model saving based on validation loss
+- Mixed precision training (disable with `--no_mixed_precision`)
+- GPU memory optimization
 
 ### Text Generation
 
