@@ -1,1 +1,2 @@
 auto_checkpoint_epoch_1_step_48403.pt filter=lfs diff=lfs merge=lfs -text
+*.pt filter=lfs diff=lfs merge=lfs -text
