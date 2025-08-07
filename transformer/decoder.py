@@ -1,3 +1,6 @@
+import torch.nn as nn
+from rms_norm import RMSNorm
+
 class Decoder(nn.Module):
     # A Decoder can have sevarel decoder blocks
     def __init__(self, layers: nn.ModuleList) -> None:

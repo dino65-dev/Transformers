@@ -9,3 +9,4 @@ def apply_rotary_pos_emb(x,cos,sin):
         #it applies Euler formula : e^(iθ) = cos(θ) + i·sin(θ) that causes (q * cos) + (rotate_half(q) * sin) is implementing: q·cos(θ) + i·q·sin(θ)
         # rotate_half is for to make the q&k (iota)imaginary part
         return (x * cos) + (rotate_half(x) * sin)
+

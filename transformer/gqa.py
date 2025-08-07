@@ -27,13 +27,13 @@ class GroupedQueryAttention(nn.Module):
         self.head_dim = d_model // num_query_heads
         #how many query heads share a single KV head
         self.group_size = num_query_heads // num_kv_heads
-        
+
         #rope initialization
         self.rope_percentage = rope_percentage
         self.rope_dim = int(self.head_dim * rope_percentage)
         if self.rope_dim > 0:
             self.rotary_pe = RotaryPositionalEmbedding(self.rope_dim)
-        
+
         #Linear projections
         self.q_proj = nn.Linear(d_model,d_model,bias=bias)
         self.k_proj = nn.Linear(d_model,self.num_kv_head * self.head_dim,bias=bias)
@@ -63,7 +63,7 @@ class GroupedQueryAttention(nn.Module):
         v = v.view(batch_size, kv_seq_length, self.num_kv_head, self.head_dim).transpose(1,2) #[batch, num_kv_head, kv_seq_length, head_dim]
 
     # ============ If you are going to use PE then don't use RoPE and vice_versa ========================
-        
+
         # Applying Rope
         if self.rope_dim > 0:
             #split into RoPE and non-RoPE parts
@@ -81,9 +81,9 @@ class GroupedQueryAttention(nn.Module):
             # concatenate back
             q = torch.cat([q_rope,q_pass],dim=-1)
             k = torch.cat([k_rope, k_pass],dim=-1)
-            
+
     #=======================================================================================================
-        
+
         #Expand keys and values to match query heads
         # Each group of query heads shares the same kv heads
         #after learning the learned matrices of key is copied into (k_head * group_size) total

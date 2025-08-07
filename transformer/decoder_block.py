@@ -1,3 +1,6 @@
+from residual_connection import ResidualConnection
+import torch.nn as nn
+
 class DecoderBlock(nn.Module):
     def __init__(self, masked_attention_block, feed_forward_block, dropout):
         super().__init__()
@@ -18,7 +21,7 @@ class DecoderBlock(nn.Module):
                     cache=cache
                 )
             )
-            
+
             # Handle tuple return from residual connection
             if isinstance(result, tuple):
                 x, self_attn_cache = result
@@ -35,14 +38,14 @@ class DecoderBlock(nn.Module):
                 )
             )
             self_attn_cache = None
-        
+
         # Feed forward block (no cache)
         x = self.residual_connection[1](x, self.feed_forward)
-        
+
         # Return based on mode
         if use_cache:
             return x, self_attn_cache
         else:
             return x  # Return only tensor during training
 
-     
+

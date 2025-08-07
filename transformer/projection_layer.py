@@ -1,3 +1,5 @@
+import torch
+import torch.nn as nn
 class ProjectionLayer(nn.Module):
     # projection layer is the output of ffn from decoder and the applied on liner,softmax layer
     def __init__(self, d_model : int , vacab_size: int) -> None:

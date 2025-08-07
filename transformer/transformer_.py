@@ -1,5 +1,9 @@
 from typing import Optional
-
+from input_embeddings import InputEmbeddings
+from positional_encoding import PositionalEncoding
+from projection_layer import ProjectionLayer
+from decoder import Decoder
+import torch.nn as nn
 class Transformer(nn.Module):
 
     """This takes in the encoder and decoder, as well the embeddings for the source
@@ -7,7 +11,6 @@ class Transformer(nn.Module):
       as well as projection layer """
 
     def __init__(self,
-                 encoder: Optional[Encoder] = None,
                  decoder: Optional[Decoder] = None,
                  src_embed: Optional[InputEmbeddings] = None,
                  tgt_embed: Optional[InputEmbeddings] = None,
@@ -16,7 +19,6 @@ class Transformer(nn.Module):
                  projection_layer: Optional[ProjectionLayer] = None,
                 use_rope: bool = True) -> None:
         super().__init__()
-        self.encoder = encoder
         self.decoder = decoder
         self.src_embed = src_embed
         self.tgt_embed = tgt_embed
@@ -30,13 +32,6 @@ class Transformer(nn.Module):
             print("Warning: Using RoPE with separate positional encodings. "
                   "Consider setting src_pos=None, tgt_pos=None for pure RoPE.")
 
-    # Encoder
-    def encode(self,src,src_mask):
-        if self.src_embed is None or self.src_pos is None or self.encoder is None:
-            raise ValueError("Encoder components are not initialized. This is a decoder-only model.")
-        src = self.src_embed(src) # Applying source embeddings to the input source language
-        src = self.src_pos(src) # Applying source positional encoding to the source embeddings
-        return self.encoder(src,src_mask) # Returning the source embeddings plus a source mask to prevent attention to certain elements
 
     #Decoder
     # tgt_embed --> right shifted embedding
@@ -47,7 +42,7 @@ class Transformer(nn.Module):
         if self.tgt_embed is None or self.decoder is None:
             raise ValueError("Decoder components are not properly initialized.")
         tgt = self.tgt_embed(tgt) # Applying target embeddings to the input target language (tgt)
-        # Apply positional encoding only if not using RoPE or explicitly provided  
+        # Apply positional encoding only if not using RoPE or explicitly provided
         if not self.use_rope and self.tgt_pos is not None:
             tgt = self.tgt_pos(tgt) # Applying target positional encoding to the target embeddings
         elif self.use_rope and self.tgt_pos is not None:
