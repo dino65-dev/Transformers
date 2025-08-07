@@ -55,6 +55,7 @@ The main training implementation is available in `model_train.ipynb` and `test-n
 - Automatic checkpointing and logging
 
 Example training command (adapt paths as needed):
+
 ```bash
 python train.py --dataset_path /path/to/lmsys-chat-1m --epochs 5 --batch_size 8 --lr 3e-4 --use_wandb True
 ```
@@ -63,7 +64,7 @@ python train.py --dataset_path /path/to/lmsys-chat-1m --epochs 5 --batch_size 8 
 - `--epochs`: Number of training epochs (default: 5)
 - `--batch_size`: Batch size (default: 8; adjust based on GPU memory)
 - `--lr`: Learning rate (default: 3e-4)
-- `--use_wandb`: Enable WandB logging (requires `wandb login`)
+- `--use_wandb`: Enable WandB logging (requires wandb login)
 
 **Training Features:**
 - Loss logging every 5 batches
@@ -114,6 +115,12 @@ Example training progression:
 - Epoch 1: Average Loss ~6.0 (starting from ~10.3)
 - Subsequent epochs: Convergence to ~4.0-5.0 range
 
+### Training Loss Progression
+
+![Training Loss](Screenshot%202025-08-01%20214849.png)
+
+*Training loss curve showing the model's learning progression over epochs. The graph demonstrates the typical loss reduction pattern during transformer model training.*
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request. Areas for improvement include:
@@ -135,5 +142,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 For questions, feature requests, or collaboration opportunities, please open an issue or contact via GitHub.
 
 ---
-
 **Happy training!** 🚀
