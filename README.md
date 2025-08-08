@@ -121,15 +121,25 @@ python train/train.py --no_wandb
 
 After training, use the model for text generation:
 
-```python
-# Example usage in script or notebook
-from model import generate_with_cache  # Import your generation function
-
-prompt = "Hello, how are you?"
-generated = generate_with_cache(model, tokenizer, prompt, max_length=100)
-print(generated)
+```bash
+python test/cli_generate.py \
+  --checkpoint ./my_model_checkpoints/best_model.pt \
+  --prompt "<user> Hello! How are you?" \
+  --max_new_tokens 100 \
+  --device cuda
 ```
 
+If you trained with non-default model hyperparams, pass them to match:
+
+```bash
+python test/cli_generate.py \
+  --checkpoint ./my_model_checkpoints/best_model.pt \
+  --prompt "Once upon a time" \
+  --d_model 768 --num_layers 10 --num_heads 12 --kv_heads 4 --d_ff 2048 --seq_len 2048
+```
+
+Tokenizer behavior (generation):
+- Uses GPT-2 tokenizer with added special tokens: [PAD], <user>, <assistant>.
 ## Project Structure
 
 ```
@@ -160,6 +170,10 @@ print(generated)
 Example training progression:
 - Epoch 1: Average Loss ~6.0 (starting from ~10.3)
 - Subsequent epochs: Convergence to ~4.0-5.0 range
+- 
+## Hardware & Training Time
+- Trained on Ola Krutim AI Pod A100 40GB.
+- A full run took approximately 6.5 hours.
 
 ### Training Loss Progression
 
