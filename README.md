@@ -126,9 +126,3 @@ MIT
 
 --- 
 **Happy training!** 🚀
-## License
-
-MIT
-
----
-**Happy training!** 🚀
