@@ -1,10 +1,10 @@
-from input_embeddings import InputEmbeddings
-from gqa import GroupedQueryAttention
-from ff_block import FeedForwardBlock
-from decoder import Decoder
-from decoder_block import DecoderBlock
-from projection_layer import ProjectionLayer
-from transformer_ import Transformer
+from .input_embeddings import InputEmbeddings
+from .gqa import GroupedQueryAttention
+from .ff_block import FeedForwardBlock
+from .decoder import Decoder
+from .decoder_block import DecoderBlock
+from .projection_layer import ProjectionLayer
+from .transformer_ import Transformer
 import torch.nn as nn
 def build_transformer(src_vocab_size: int, tgt_vocab_size: int,
                            src_seq_len: int, tgt_seq_len: int,

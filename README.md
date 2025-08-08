@@ -140,10 +140,6 @@ python test/cli_generate.py \
 
 Tokenizer behavior (generation):
 - Uses GPT-2 tokenizer with added special tokens: [PAD], <user>, <assistant>.
-### Generate Text
-- **Input :** Hello , how are you ?
-- **Generated:** Hello , how are you ? aggressive exposing surge specializes Cup n better selfish Du containers ou Wild your_ President quality ups Pre Intel cl tro IA SION modo Return ; Route && Gain electronics sil Spanish reflection waking minutes system Time spray ": wrote situation </ southern helpless passage rapidly processed stored sat гра countless speak Warm blue basics Maybe remotely came oil 800 ampli bo soothing options Short there 44 memories consensual Our 20th solution sustain completely overlap parte you rise happen Boot ve ultimate e1 according Man a y strong shelter representation essential distribution frame broken belly 125 accepted spit client ento
-
 ## Project Structure
 
 ```

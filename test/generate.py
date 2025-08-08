@@ -3,16 +3,40 @@ import os
 import sys
 import torch
 import torch.nn.functional as F
+from pathlib import Path
 
-# Ensure local imports work
-sys.path.append('/workspaces/Transformers')
+# Dynamically add repo root to sys.path (works on Colab and locally)
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-from transformer.build_transformer import build_transformer
+# Try to import build_transformer from the local package
+try:
+    from transformer.build_transformer import build_transformer
+except Exception as e:
+    raise ImportError(
+        "Could not import 'build_transformer' from the local 'transformer' package. "
+        "Ensure your working directory is the repo root and that the 'transformer' "
+        "package (with build_transformer.py) exists.\n"
+        f"Repo root detected: {REPO_ROOT}\nOriginal error: {e}"
+    )
 
 def load_model_for_inference(checkpoint_path, model, device="cuda"):
     print(f"Loading model from: {checkpoint_path}")
     checkpoint = torch.load(checkpoint_path, map_location=device)
-    model.load_state_dict(checkpoint['model_state_dict'])
+    try:
+        model.load_state_dict(checkpoint['model_state_dict'])
+    except RuntimeError as re:
+        # Helpful hint if vocab sizes mismatch (very common if tokenizer differs)
+        proj_key = 'projection_layer.proj.weight'
+        ckpt_vocab = checkpoint['model_state_dict'].get(proj_key, None)
+        model_vocab = dict(model.named_parameters()).get(proj_key, None)
+        if ckpt_vocab is not None and model_vocab is not None:
+            print(f"State dict mismatch while loading checkpoint.")
+            print(f"Checkpoint vocab size: {ckpt_vocab.shape[0]}, Model vocab size: {model_vocab.shape[0]}")
+            print("Use the same tokenizer as training (or pass the correct tokenizer/model args).")
+        raise re
+
     model.eval()
     model.to(device)
     print("✅ Model loaded successfully for inference!")
@@ -29,21 +53,14 @@ def generate(model, tokenizer, prompt, max_new_tokens=100, device="cuda"):
 
         for _ in range(max_new_tokens):
             seq_len = generated_ids.shape[1]
-            causal_mask = torch.tril(torch.ones(seq_len, seq_len, device=device))  # 0/1 mask
+            causal_mask = torch.tril(torch.ones(seq_len, seq_len, device=device)).bool()
 
-            # Forward pass like in the notebook training cell
-            embeddings = model.tgt_embed(generated_ids)
-            output = embeddings
-            for layer in model.decoder.layers:
-                output = layer(output, causal_mask, use_cache=False)  # returns tensor in training mode
+            # Use the model's API (consistent with training code)
+            decoder_out, _ = model.decode(generated_ids, causal_mask)
+            logits_last = model.project(decoder_out[:, -1, :])
 
-            # Project only the last token
-            logits = model.projection_layer(output[:, -1, :])
-
-            # Notebook used softmax for sampling
-            probs = F.softmax(logits, dim=-1)
+            probs = F.softmax(logits_last, dim=-1)
             next_token = torch.multinomial(probs, 1)
-
             generated_ids = torch.cat([generated_ids, next_token], dim=1)
 
             if tokenizer.eos_token_id is not None and next_token.item() == tokenizer.eos_token_id:
@@ -57,7 +74,7 @@ def main():
     parser.add_argument("--prompt", type=str, required=True, help="Prompt to start generation")
     parser.add_argument("--max_new_tokens", type=int, default=100, help="Number of new tokens to generate")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Device")
-    # Model args (same defaults as notebook/train)
+    # Model args (must match training)
     parser.add_argument("--d_model", type=int, default=768)
     parser.add_argument("--num_layers", type=int, default=10)
     parser.add_argument("--num_heads", type=int, default=12)
@@ -65,19 +82,27 @@ def main():
     parser.add_argument("--d_ff", type=int, default=2048)
     parser.add_argument("--dropout", type=float, default=0.1)
     parser.add_argument("--seq_len", type=int, default=2048)
+    # Tokenizer source (use the same one you trained with)
+    parser.add_argument("--tokenizer", type=str, default="gpt2", help="HF model id or local path to tokenizer")
     args = parser.parse_args()
 
-    # Tokenizer setup (mirrors notebook behavior)
+    # Tokenizer setup (match training tokenizer)
     from transformers import PreTrainedTokenizerFast
-    tokenizer = PreTrainedTokenizerFast.from_pretrained("gpt2")
-    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer = PreTrainedTokenizerFast.from_pretrained(args.tokenizer)
+    # Add the same special tokens as training (no-op if already present)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
     special_tokens = {
-        'pad_token': '[PAD]',
+        'pad_token': tokenizer.pad_token if tokenizer.pad_token is not None else '[PAD]',
         'additional_special_tokens': ["<user>", "<assistant>"]
     }
-    tokenizer.add_special_tokens(special_tokens)
+    try:
+        tokenizer.add_special_tokens(special_tokens)
+    except Exception:
+        pass
 
-    # Build model
+    # Build model with vocab size based on tokenizer to match checkpoint shapes
+    device = torch.device(args.device)
     model = build_transformer(
         src_vocab_size=len(tokenizer),
         tgt_vocab_size=len(tokenizer),
@@ -89,23 +114,9 @@ def main():
         kv_h=args.kv_heads,
         dropout=args.dropout,
         d_ff=args.d_ff
-    )
+    ).to(device)
 
-    # Match notebook resizing/initialization
-    device = torch.device(args.device)
-    model = model.to(device)
-    model.tgt_embed.weight = torch.nn.Parameter(
-        torch.randn(len(tokenizer), args.d_model).to(device)
-    )
-    model.projection_layer.proj.weight = torch.nn.Parameter(
-        torch.randn(len(tokenizer), args.d_model).to(device)
-    )
-    model.projection_layer.proj.bias = torch.nn.Parameter(
-        torch.zeros(len(tokenizer)).to(device)
-    )
-    torch.nn.init.xavier_uniform_(model.tgt_embed.weight)
-    torch.nn.init.xavier_uniform_(model.projection_layer.proj.weight)
-    torch.nn.init.zeros_(model.projection_layer.proj.bias)
+    # Do not manually resize/reinit embeddings/projection here; rely on checkpoint weights
 
     # Load checkpoint
     model = load_model_for_inference(args.checkpoint, model, device=device)
