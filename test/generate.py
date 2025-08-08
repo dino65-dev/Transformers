@@ -25,9 +25,13 @@ def load_model_for_inference(checkpoint_path, model, device="cuda"):
     print(f"Loading model from: {checkpoint_path}")
     checkpoint = torch.load(checkpoint_path, map_location=device)
     try:
-        model.load_state_dict(checkpoint['model_state_dict'])
+        # Tolerate extra keys from training (e.g., tgt_embed.weight) and report
+        missing, unexpected = model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+        if missing:
+            print(f"⚠️ Missing keys: {len(missing)} (showing first 5) -> {missing[:5]}")
+        if unexpected:
+            print(f"⚠️ Unexpected keys: {len(unexpected)} (showing first 5) -> {unexpected[:5]}")
     except RuntimeError as re:
-        # Helpful hint if vocab sizes mismatch (very common if tokenizer differs)
         proj_key = 'projection_layer.proj.weight'
         ckpt_vocab = checkpoint['model_state_dict'].get(proj_key, None)
         model_vocab = dict(model.named_parameters()).get(proj_key, None)
@@ -87,8 +91,8 @@ def main():
     args = parser.parse_args()
 
     # Tokenizer setup (match training tokenizer)
-    from transformers import PreTrainedTokenizerFast
-    tokenizer = PreTrainedTokenizerFast.from_pretrained(args.tokenizer)
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer, use_fast=True)
     # Add the same special tokens as training (no-op if already present)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
