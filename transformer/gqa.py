@@ -2,6 +2,8 @@ import torch.nn as nn
 import torch
 import math
 import torch.nn.functional as F
+from rope_helper import apply_rotary_pos_emb
+from rope import RotaryPositionalEmbedding
 class GroupedQueryAttention(nn.Module):
     """
         Grouped Query Attention
