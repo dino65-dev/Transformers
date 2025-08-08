@@ -1,4 +1,4 @@
-from residual_connection import ResidualConnection
+from .residual_connection import ResidualConnection
 import torch.nn as nn
 
 class DecoderBlock(nn.Module):

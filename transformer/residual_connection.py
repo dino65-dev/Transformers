@@ -1,4 +1,4 @@
-from rms_norm import RMSNorm
+from .rms_norm import RMSNorm
 import torch.nn as nn
 
 class ResidualConnection(nn.Module):

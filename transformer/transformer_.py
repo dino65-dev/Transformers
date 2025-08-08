@@ -1,8 +1,8 @@
 from typing import Optional
-from input_embeddings import InputEmbeddings
-from positional_encoding import PositionalEncoding
-from projection_layer import ProjectionLayer
-from decoder import Decoder
+from .input_embeddings import InputEmbeddings
+from .positional_encoding import PositionalEncoding
+from .projection_layer import ProjectionLayer
+from .decoder import Decoder
 import torch.nn as nn
 class Transformer(nn.Module):
 
