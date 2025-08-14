@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository contains a custom implementation of decoder-only transformer models, inspired by modern architectures like GPT. It includes comprehensive code for training conversational AI models on datasets like LMSYS-Chat-1M, featuring advanced techniques such as Grouped Query Attention (GQA), Rotary Positional Embeddings (RoPE), and RMSNorm.
+This repository contains a custom implementation of decoder-only transformer models, inspired by modern architectures like SmolLm(Hugging Face). It includes comprehensive code for training conversational AI models on datasets like LMSYS-Chat-1M, featuring advanced techniques such as Grouped Query Attention (GQA), Rotary Positional Embeddings (RoPE), and RMSNorm.
 
 The implementation demonstrates end-to-end training from scratch, including data preparation, model building, and optimization techniques like mixed precision training. With a flexible command-line interface, users can easily configure model architecture, training parameters, and dataset choices without code modifications. This repository is designed for researchers, developers, and practitioners interested in understanding and implementing transformer architectures for conversational AI applications.
 
