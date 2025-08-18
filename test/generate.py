@@ -21,6 +21,65 @@ except Exception as e:
         f"Repo root detected: {REPO_ROOT}\nOriginal error: {e}"
     )
 
+def create_32k_tokenizer(dataset_name="lmsys/lmsys-chat-1m", vocab_size=32000):
+    """Create a custom 32K BPE tokenizer - identical to the notebook implementation"""
+    print(f"Creating 32K tokenizer from {dataset_name}...")
+    
+    # Import necessary libraries
+    try:
+        from datasets import load_dataset
+        from tokenizers import Tokenizer
+        from tokenizers.models import BPE
+        from tokenizers.trainers import BpeTrainer
+        from tokenizers.pre_tokenizers import Whitespace
+        from transformers import PreTrainedTokenizerFast
+    except ImportError as e:
+        raise ImportError(f"Missing required packages for tokenizer creation: {e}")
+
+    # Load the dataset
+    dataset = load_dataset(dataset_name)
+    dataset = dataset.filter(lambda x: x['language'] == 'English')
+    
+    # Initialize tokenizer
+    tokenizer = Tokenizer(BPE(unk_token="<unk>"))
+    tokenizer.pre_tokenizer = Whitespace()
+    
+    # Setup trainer
+    trainer = BpeTrainer(
+        vocab_size=vocab_size,
+        special_tokens=["<pad>", "<unk>", "<bos>", "<eos>"]
+    )
+    
+    # Prepare training data
+    def get_training_corpus():
+        for item in dataset["train"]:
+            conversation = item['conversation']
+            for turn in conversation:
+                yield turn['content']
+    
+    # Train tokenizer
+    print("Training tokenizer from dataset... (this may take a while)")
+    tokenizer.train_from_iterator(get_training_corpus(), trainer)
+    
+    # Convert to HuggingFace tokenizer
+    hf_tokenizer = PreTrainedTokenizerFast(tokenizer_object=tokenizer)
+    hf_tokenizer.pad_token = "<pad>"
+    hf_tokenizer.eos_token = "<eos>"
+    hf_tokenizer.bos_token = "<bos>"
+    hf_tokenizer.unk_token = "<unk>"
+    
+    # Add the same special tokens as in training
+    hf_tokenizer.pad_token = hf_tokenizer.eos_token
+    special_tokens = {
+        'pad_token': '[PAD]',
+        'additional_special_tokens': ["<user>", "<assistant>"]
+    }
+    num_added = hf_tokenizer.add_special_tokens(special_tokens)
+    print(f"Added {num_added} special tokens to match training")
+    
+    print(f"✅ 32K tokenizer created with vocab size: {len(hf_tokenizer)}")
+    return hf_tokenizer
+
 def load_model_for_inference(checkpoint_path, model, device="cuda"):
     print(f"Loading model from: {checkpoint_path}")
     checkpoint = torch.load(checkpoint_path, map_location=device)
@@ -86,30 +145,40 @@ def main():
     parser.add_argument("--d_ff", type=int, default=2048)
     parser.add_argument("--dropout", type=float, default=0.1)
     parser.add_argument("--seq_len", type=int, default=2048)
-    # Tokenizer source (use the same one you trained with)
-    parser.add_argument("--tokenizer", type=str, default="gpt2", help="HF model id or local path to tokenizer")
+    # Tokenizer options
+    parser.add_argument("--tokenizer", type=str, default=None, 
+                      help="Path to saved tokenizer directory (if omitted, creates 32K tokenizer)")
+    parser.add_argument("--save_tokenizer", type=str, default=None, 
+                      help="Directory to save the 32K tokenizer for future use")
+    parser.add_argument("--dataset", type=str, default="lmsys/lmsys-chat-1m", 
+                      help="Dataset to use for creating 32K tokenizer")
     args = parser.parse_args()
 
-    # Tokenizer setup (match training tokenizer)
-    from transformers import AutoTokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer, use_fast=True)
-    # Add the same special tokens as training (no-op if already present)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    special_tokens = {
-        'pad_token': tokenizer.pad_token if tokenizer.pad_token is not None else '[PAD]',
-        'additional_special_tokens': ["<user>", "<assistant>"]
-    }
-    try:
-        tokenizer.add_special_tokens(special_tokens)
-    except Exception:
-        pass
+    # Tokenizer setup - use the same 32K tokenizer from notebook by default
+    if args.tokenizer:
+        # Load from saved tokenizer if provided
+        from transformers import AutoTokenizer
+        print(f"Loading tokenizer from {args.tokenizer}")
+        tokenizer = AutoTokenizer.from_pretrained(args.tokenizer)
+    else:
+        # Create 32K tokenizer matching the notebook
+        tokenizer = create_32k_tokenizer(args.dataset, vocab_size=32000)
+        
+        # Save tokenizer if requested
+        if args.save_tokenizer:
+            save_dir = args.save_tokenizer
+            os.makedirs(save_dir, exist_ok=True)
+            tokenizer.save_pretrained(save_dir)
+            print(f"Saved 32K tokenizer to {save_dir}")
 
-    # Build model with vocab size based on tokenizer to match checkpoint shapes
+    # Build model with tokenizer vocab size for exact match
     device = torch.device(args.device)
+    vocab_size = len(tokenizer)
+    print(f"Building model with vocabulary size: {vocab_size}")
+    
     model = build_transformer(
-        src_vocab_size=len(tokenizer),
-        tgt_vocab_size=len(tokenizer),
+        src_vocab_size=vocab_size,
+        tgt_vocab_size=vocab_size,
         src_seq_len=args.seq_len,
         tgt_seq_len=args.seq_len,
         d_model=args.d_model,
@@ -119,8 +188,6 @@ def main():
         dropout=args.dropout,
         d_ff=args.d_ff
     ).to(device)
-
-    # Do not manually resize/reinit embeddings/projection here; rely on checkpoint weights
 
     # Load checkpoint
     model = load_model_for_inference(args.checkpoint, model, device=device)
