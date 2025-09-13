@@ -1,19 +1,21 @@
-# Transformers: A Custom Implementation of Decoder-Only Transformer Models
+# Transformers: Custom Decoder-Only Transformer Implementation
 
 ## Overview
 
-This repository contains a custom implementation of decoder-only transformer models, inspired by modern architectures like SmolLm(Hugging Face). It includes comprehensive code for training conversational AI models on datasets like LMSYS-Chat-1M, featuring advanced techniques such as Grouped Query Attention (GQA), Rotary Positional Embeddings (RoPE), and RMSNorm.
+This repository contains a comprehensive from-scratch implementation of decoder-only transformer models, featuring advanced techniques like **Grouped Query Attention (GQA)**, **Rotary Positional Embeddings (RoPE)**, and **RMSNorm**. The implementation demonstrates end-to-end training on conversational datasets like LMSYS-Chat-1M with modern optimization techniques including mixed precision training and WandB monitoring.
 
-The implementation demonstrates end-to-end training from scratch, including data preparation, model building, and optimization techniques like mixed precision training. With a flexible command-line interface, users can easily configure model architecture, training parameters, and dataset choices without code modifications. This repository is designed for researchers, developers, and practitioners interested in understanding and implementing transformer architectures for conversational AI applications.
+Designed for researchers, developers, and practitioners interested in understanding and implementing transformer architectures for conversational AI applications.
 
 ## Key Features
 
-- **Decoder-only transformer architecture** - Clean, modular implementation
-- **Custom tokenizer support** - Compatible with BPE tokenizers (e.g., 32K vocabulary)
-- **Efficient training** - Mixed precision training with gradient clipping
-- **Monitoring integration** - WandB support for tracking loss and metrics
-- **Flexible configuration** - Command-line interface for model parameters and dataset selection
-- **Dataset flexibility** - Support for various HuggingFace datasets with customizable configurations
+- **🏗️ Modular Architecture** - Clean, well-structured transformer implementation
+- **⚡ Advanced Attention** - Grouped Query Attention (GQA) for efficient inference
+- **🔄 Rotary Embeddings** - RoPE for better positional understanding
+- **📊 RMSNorm** - Stable normalization technique
+- **🚀 Efficient Training** - Mixed precision training with gradient clipping
+- **📈 Monitoring** - WandB integration for experiment tracking
+- **⚙️ Flexible CLI** - Command-line interface for easy configuration
+- **📦 Dataset Support** - Compatible with HuggingFace datasets
 
 ## Installation
 
@@ -21,34 +23,33 @@ The implementation demonstrates end-to-end training from scratch, including data
 
 - Python 3.8+
 - PyTorch 2.0+ (with CUDA support for GPU training)
-- Hugging Face Transformers library
-- Datasets library for data loading
+- Hugging Face Transformers and Datasets libraries
 - WandB (optional, for experiment tracking)
 
 ### Setup
 
-1. Clone the repository:
+1. **Clone the repository:**
    ```bash
    git clone https://github.com/dino65-dev/Transformers.git
    cd Transformers
    ```
 
-2. Create and activate a virtual environment:
+2. **Create virtual environment:**
    ```bash
    python -m venv env
    source env/bin/activate  # On Windows: env\Scripts\activate
    ```
 
-3. Install dependencies:
+3. **Install dependencies:**
    ```bash
    pip install torch transformers datasets wandb tokenizers
    ```
 
 ## Usage
 
-### Model Training via Command Line
+### Training
 
-Train models directly from the command line with extensive configuration options:
+Train models with the comprehensive CLI interface:
 
 ```bash
 python train/train.py \
@@ -67,128 +68,153 @@ python train/train.py \
   --dataset_subset 10000
 ```
 
-#### Core Training Parameters
+#### Key Training Parameters
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `--d_model` | Model dimension | 768 |
-| `--num_layers` | Number of transformer layers | 10 |
-| `--num_heads` | Number of attention heads | 12 |
-| `--kv_heads` | Number of key-value heads (GQA) | 4 |
+| `--num_layers` | Transformer layers | 10 |
+| `--num_heads` | Attention heads | 12 |
+| `--kv_heads` | Key-value heads (GQA) | 4 |
+| `--d_ff` | Feed-forward dimension | 2048 |
 | `--dropout` | Dropout rate | 0.1 |
+| `--seq_len` | Sequence length | 2048 |
 | `--epochs` | Training epochs | 5 |
 | `--batch_size` | Batch size | 6 |
 | `--lr` | Learning rate | 3e-4 |
 
 #### Dataset Configuration
 
-Choose from any dataset on HuggingFace or use your own:
-
 ```bash
-# Using EleutherAI/pile dataset
-python train/train.py --dataset_name "EleutherAI/pile" --dataset_config "all" --dataset_subset 10000
-
-# Using Alpaca dataset
-python train/train.py --dataset_name "tatsu-lab/alpaca" --dataset_split "train" 
+# Using different datasets
+python train/train.py --dataset_name "EleutherAI/pile" --dataset_config "all"
+python train/train.py --dataset_name "tatsu-lab/alpaca" --dataset_split "train"
 ```
-
-Dataset parameters:
-- `--dataset_name`: Name of dataset on HuggingFace or path to local dataset
-- `--dataset_config`: Configuration name for the dataset (if applicable)
-- `--dataset_split`: Dataset split to use (default: "train")
-- `--dataset_subset`: Number of examples to use (limit dataset size)
 
 #### WandB Integration
 
-Enable or disable WandB logging:
-
 ```bash
-# Enable WandB with custom project and run name
+# Enable WandB logging
 python train/train.py --project_name "my-transformer" --run_name "experiment-1"
 
 # Disable WandB
 python train/train.py --no_wandb
 ```
 
-### Training Features
-
-- Automatic checkpointing every 2 hours
-- Best model saving based on validation loss
-- Mixed precision training (disable with `--no_mixed_precision`)
-- GPU memory optimization
-
 ### Text Generation
 
-After training, use the model for text generation:
+Generate text using trained models:
 
 ```bash
-python test/cli_generate.py \
-  --checkpoint ./my_model_checkpoints/best_model.pt \
+python test/generate.py \
+  --checkpoint ./checkpoints/best_model.pt \
   --prompt "<user> Hello! How are you?" \
   --max_new_tokens 100 \
   --device cuda
 ```
 
-If you trained with non-default model hyperparams, pass them to match:
+For models with custom hyperparameters:
 
 ```bash
-python test/cli_generate.py \
-  --checkpoint ./my_model_checkpoints/best_model.pt \
+python test/generate.py \
+  --checkpoint ./checkpoints/best_model.pt \
   --prompt "Once upon a time" \
-  --d_model 768 --num_layers 10 --num_heads 12 --kv_heads 4 --d_ff 2048 --seq_len 2048
+  --d_model 768 --num_layers 10 --num_heads 12 --kv_heads 4
 ```
 
-Tokenizer behavior (generation):
-- Uses GPT-2 tokenizer with added special tokens: [PAD], <user>, <assistant>.
 ## Project Structure
 
 ```
 .
-├── transformer/          # Core model implementation
-│   ├── decoder_blocks.py  # Transformer decoder blocks
-│   ├── attention.py       # Attention mechanisms
-│   └── embeddings.py      # Position and token embeddings
-├── model_train.ipynb      # Main training notebook
-├── test-ng.ipynb         # Generation and testing notebook
-├── train.py              # Training script (if available)
-└── README.md             # This file
+├── transformer/              # Core model implementation
+│   ├── build_transformer.py   # Model builder and configuration
+│   ├── transformer_.py        # Main transformer model
+│   ├── decoder.py             # Decoder wrapper
+│   ├── decoder_block.py       # Transformer decoder blocks
+│   ├── gqa.py                 # Grouped Query Attention implementation
+│   ├── rope.py                # Rotary Position Embeddings
+│   ├── rope_helper.py         # RoPE utility functions
+│   ├── rms_norm.py            # RMSNorm implementation
+│   ├── ff_block.py            # Feed-forward blocks
+│   ├── residual_connection.py # Residual connections
+│   ├── input_embeddings.py    # Token embeddings
+│   ├── positional_encoding.py # Positional encodings
+│   └── projection_layer.py    # Output projection
+├── train/                     # Training utilities
+│   ├── train.py              # Main training script
+│   ├── dataset_define.py     # Dataset processing
+│   ├── tokenizer.py          # Tokenizer setup
+│   ├── coustom_tokenizer.py  # Custom tokenizer implementation
+│   └── save_checkpoint.py    # Checkpoint management
+├── test/                     # Inference and testing
+│   └── generate.py          # Text generation script
+├── model_train.ipynb         # Training notebook
+├── test-ng.ipynb           # Testing and generation notebook
+├── auto_checkpoint_epoch_1_step_48403.pt  # Sample checkpoint
+└── Screenshot 2025-08-01 214849.png      # Training loss visualization
 ```
 
-## Training Configuration
+## Model Architecture
 
-**Default Configuration:**
-- **Dataset**: LMSYS-Chat-1M or custom conversational data
-- **Tokenizer**: Custom BPE with 32K vocabulary
-- **Model Architecture**: 
-  - `d_model=128` (embedding dimension)
-  - `num_layers=3` (transformer layers)
-  - `num_heads=2` (attention heads)
-- **Optimization**: AdamW optimizer with mixed precision training
-- **Monitoring**: WandB integration for real-time metrics
+### Core Components
 
-**Performance Metrics:**
-Example training progression:
-- Epoch 1: Average Loss ~6.0 (starting from ~10.3)
-- Subsequent epochs: Convergence to ~4.0-5.0 range
-- 
-## Hardware & Training Time
-- Trained on Ola Krutim AI Pod A100 40GB.
-- A full run took approximately 6.5 hours.
+- **Grouped Query Attention (GQA)**: Efficient attention mechanism reducing memory usage
+- **Rotary Position Embeddings (RoPE)**: Superior positional encoding for long sequences  
+- **RMSNorm**: Stable and efficient normalization
+- **Feed-Forward Networks**: SwiGLU activation with configurable dimensions
+- **Residual Connections**: Skip connections for stable training
 
-### Training Loss Progression
+### Default Configuration
+
+- **Model Dimensions**: `d_model=768`, `d_ff=2048`
+- **Architecture**: `num_layers=10`, `num_heads=12`, `kv_heads=4`
+- **Context Length**: `seq_len=2048`
+- **Tokenizer**: GPT-2 tokenizer with special tokens: `[PAD]`, `<user>`, `<assistant>`
+- **Optimization**: AdamW with mixed precision training
+
+## Training Results
+
+### Hardware & Performance
+- **Hardware**: Ola Krutim AI Pod A100 40GB
+- **Training Time**: ~6.5 hours for full run
+- **Dataset**: LMSYS-Chat-1M (subset)
+
+### Loss Progression
 
 ![Training Loss](Screenshot%202025-08-01%20214849.png)
 
-*Training loss curve showing the model's learning progression over epochs. The graph demonstrates the typical loss reduction pattern during transformer model training.*
+*Training loss curve showing convergence from ~10.3 to ~4.0-5.0 range over epochs*
+
+**Typical Training Progression:**
+- **Epoch 1**: Average Loss ~6.0 (starting from ~10.3)
+- **Later Epochs**: Convergence to ~4.0-5.0 range
+- **Monitoring**: Real-time tracking via WandB
+
+## Advanced Features
+
+### Training Features
+- ✅ Automatic checkpointing every 2 hours
+- ✅ Best model saving based on validation loss  
+- ✅ Mixed precision training (FP16)
+- ✅ Gradient clipping for stability
+- ✅ GPU memory optimization
+- ✅ Flexible dataset loading from HuggingFace
+
+### Generation Features
+- ✅ Configurable sampling parameters
+- ✅ Custom prompt templates
+- ✅ Efficient inference with KV caching
+- ✅ Multi-turn conversation support
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request. Areas for improvement include:
+Contributions welcome! Areas for enhancement:
 
-- **Model Performance**: Enhancing generation coherence and quality
-- **Evaluation Metrics**: Adding perplexity and other standard metrics
-- **Scalability**: Supporting larger model configurations
-- **Documentation**: Improving code documentation and examples
+- 🎯 **Model Performance**: Improve generation quality and coherence
+- 📊 **Evaluation**: Add perplexity and other standard metrics  
+- 🔧 **Scalability**: Support for larger model configurations
+- 📚 **Documentation**: Enhanced code documentation and examples
+- ⚡ **Optimization**: Further training and inference speedups
 
 ## License
 
@@ -196,10 +222,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- Inspired by nanoGPT and Hugging Face Transformers
-- Built with modern transformer architecture best practices
-
-For questions, feature requests, or collaboration opportunities, please open an issue or contact via GitHub.
+- Inspired by modern transformer architectures and best practices
+- Built with PyTorch and Hugging Face ecosystem
+- Training infrastructure powered by Ola Krutim AI Pod
 
 ---
-**Happy training!** 🚀
+
+**Ready to train your own transformer? 🚀**
+
+For questions, feature requests, or collaboration opportunities, please open an issue!
