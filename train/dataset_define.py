@@ -104,7 +104,7 @@ class SlimPajamaDataset(IterableDataset):
             attention_mask = torch.tensor(attention_mask, dtype=torch.long)
             labels = input_ids.clone()
             # Mask padding in labels so loss ignores them
-            labels[torch.tensor(attention_mask, dtype=torch.long) == 0] = -100
+            labels[attention_mask == 0] = -100
 
             yield {
                 "input_ids": input_ids,
