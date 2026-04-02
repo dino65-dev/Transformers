@@ -11,7 +11,7 @@ def save_checkpoint(model, optimizer, epoch, global_step, current_loss, best_los
         'optimizer_state_dict': optimizer.state_dict(),
         'current_loss': current_loss,
         'best_loss': best_loss,
-        'timestamp': datetime.now().isoformat(),
+        'timestamp': datetime.datetime.now().isoformat(),
         'training_args': {
             'lr': optimizer.param_groups[0]['lr'],
             'weight_decay': optimizer.param_groups[0]['weight_decay'],
@@ -20,7 +20,7 @@ def save_checkpoint(model, optimizer, epoch, global_step, current_loss, best_los
 
     checkpoint_path = os.path.join(checkpoint_dir, filename)
     torch.save(checkpoint, checkpoint_path)
-    print(f"💾 Checkpoint saved to: {checkpoint_path}")
+    print(f"[SAVED] Checkpoint saved to: {checkpoint_path}")
 
     # Clean up old auto-checkpoints (keep only last 3)
     if "auto_checkpoint" in filename:
@@ -42,6 +42,6 @@ def cleanup_old_checkpoints(checkpoint_dir, keep_last=3):
     for filepath, _ in auto_checkpoints[keep_last:]:
         try:
             os.remove(filepath)
-            print(f"🗑️ Removed old checkpoint: {os.path.basename(filepath)}")
+            print(f"[REMOVED] Removed old checkpoint: {os.path.basename(filepath)}")
         except OSError:
             pass
