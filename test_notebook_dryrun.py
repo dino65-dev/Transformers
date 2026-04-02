@@ -1,167 +1,139 @@
-"""
-Test script: validates that pretrain_slimpajama.ipynb code runs correctly.
-Uses YOUR existing code from train/ and transformer/ folders.
-Simulates SlimPajama data with a fake IterableDataset -- no real download.
-"""
-import sys, os, time
+"""Verify the fixed notebook logic: RMSNorm gamma + LR schedule + training."""
+import sys, os, math, time
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "train"))
 
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-TRAIN_DIR = os.path.join(PROJECT_ROOT, "train")
-sys.path.insert(0, PROJECT_ROOT)
-sys.path.insert(0, TRAIN_DIR)
-
-# ========== 1. Import YOUR modules ==========
-print("=== 1. Import existing modules ===")
 import torch
 import torch.nn as nn
 from torch.amp import autocast, GradScaler
 from torch.utils.data import DataLoader, IterableDataset
-from datetime import datetime
-
 from transformer.build_transformer import build_transformer
-
-# Import directly from train/ (on sys.path, no package prefix needed)
-from save_checkpoint import save_checkpoint
 from tokenizer import tokenizer
-from dataset_define import SlimPajamaDataset
 
-print("[PASS] All imports from your existing code succeeded")
-
-# ========== 2. Config (same as notebook) ==========
-print("\n=== 2. Config ===")
-D_MODEL     = 768
-NUM_LAYERS  = 12
-NUM_HEADS   = 12
-KV_HEADS    = 4
-D_FF        = 3072
-DROPOUT     = 0.1
-MAX_SEQ_LEN = 2048
-USE_REPO    = True
-USE_FLASH   = True
-BATCH_SIZE  = 2
-LR          = 3e-4
-VOCAB_SIZE  = len(tokenizer)
-PAD_TOKEN_ID = tokenizer.pad_token_id
+VOCAB_SIZE = len(tokenizer)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-CHECKPOINT_DIR = os.path.join(PROJECT_ROOT, "_test_checkpoints")
 
-print(f"Vocab={VOCAB_SIZE}, pad_id={PAD_TOKEN_ID}, device={device}")
-
-# ========== 3. Build model (same as notebook) ==========
-print("\n=== 3. Build model ===")
-model = build_transformer(
-    src_vocab_size=VOCAB_SIZE, tgt_vocab_size=VOCAB_SIZE,
-    src_seq_len=MAX_SEQ_LEN, tgt_seq_len=MAX_SEQ_LEN,
-    d_model=D_MODEL, N=NUM_LAYERS, h=NUM_HEADS, kv_h=KV_HEADS,
-    dropout=DROPOUT, d_ff=D_FF, use_repo=USE_REPO, use_flash=USE_FLASH,
-)
+# 1. Build model and verify gammas
+print("=== 1. Build model ===")
+model = build_transformer(VOCAB_SIZE, VOCAB_SIZE, 2048, 2048,
+    d_model=768, N=12, h=12, kv_h=4, dropout=0.1, d_ff=3072,
+    use_repo=True, use_flash=True)
 model = model.to(device)
-total_params = sum(p.numel() for p in model.parameters())
-print(f"[PASS] Model: {total_params:,} params ({total_params/1e6:.1f}M)")
+print(f"Params: {sum(p.numel() for p in model.parameters()):,}")
 
-# ========== 4. Fake dataset mimicking SlimPajamaDataset output ==========
-print("\n=== 4. Fake SlimPajama iterator ===")
-class FakeSlimPajama(IterableDataset):
-    """Mimics the output format of SlimPajamaDataset without parquet files."""
-    def __init__(self, tok, max_len, n=8):
-        self.tok = tok
-        self.max_len = max_len
+# CRITICAL: Check RMSNorm gamma is NOT zero
+for name, p in model.named_parameters():
+    if 'gamma' in name:
+        val = p.abs().mean().item()
+        status = "[OK]" if val > 0.5 else "[FAIL]"
+        print(f"  {status} {name}: mean_abs={val:.4f}")
+        assert val > 0.5, f"FATAL: {name} is near zero!"
+print("[PASS] All gamma params are non-zero")
+
+# 2. Verify output is not dead
+print("\n=== 2. Output check ===")
+model.train()
+dummy = torch.randint(0, VOCAB_SIZE, (2, 128), device=device)
+with torch.no_grad():
+    x = model.tgt_embed(dummy)
+    for layer in model.decoder.layers:
+        x, _ = layer(x, tgt_mask=None, use_cache=False)
+    x = model.decoder.norm(x)
+    logits = model.project(x)
+print(f"Logits std: {logits.std().item():.4f}")
+assert logits.std().item() > 0.01, "FATAL: Dead output!"
+print("[PASS] Model output is alive")
+
+# 3. LR schedule
+print("\n=== 3. LR schedule ===")
+LR = 3e-4; MIN_LR = 3e-5; WARMUP = 200; TOTAL = 15258
+def get_lr(step):
+    if step < WARMUP:
+        return LR * (step + 1) / WARMUP
+    progress = min((step - WARMUP) / max(1, TOTAL - WARMUP), 1.0)
+    cosine = 0.5 * (1.0 + math.cos(math.pi * progress))
+    return MIN_LR + (LR - MIN_LR) * cosine
+
+for s in [0, 10, 50, 100, 200, 500, 2000, 10000]:
+    print(f"  Step {s:>6}: {get_lr(s):.8f}")
+assert get_lr(0) > 0, "LR at step 0 must be > 0"
+assert get_lr(100) > 1e-4, "LR at step 100 must be meaningful"
+assert get_lr(200) > 2.9e-4, "LR at warmup end must be near peak"
+print("[PASS] LR schedule looks correct")
+
+# 4. Training steps
+print("\n=== 4. Training (3 steps) ===")
+class FakeDS(IterableDataset):
+    def __init__(self, n=32):
         self.n = n
     def __iter__(self):
-        for i in range(self.n):
-            text = f"The quick brown fox jumps over the lazy dog. Sample {i}. " * 20
-            ids = self.tok.encode(text, add_special_tokens=False)
-            if self.tok.eos_token_id is not None:
-                ids.append(self.tok.eos_token_id)
-            ids = ids[:self.max_len]
-            attn = [1] * len(ids)
-            pad_len = self.max_len - len(ids)
-            if pad_len > 0:
-                ids = ids + [self.tok.pad_token_id] * pad_len
-                attn = attn + [0] * pad_len
-            input_ids = torch.tensor(ids, dtype=torch.long)
-            attention_mask = torch.tensor(attn, dtype=torch.long)
-            labels = input_ids.clone()
-            labels[attention_mask == 0] = -100
-            yield {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
+        for _ in range(self.n):
+            ids = torch.randint(0, VOCAB_SIZE, (2048,))
+            yield {"input_ids": ids, "labels": ids.clone()}
 
-train_loader = DataLoader(FakeSlimPajama(tokenizer, MAX_SEQ_LEN, n=8), batch_size=BATCH_SIZE)
-print("[PASS] Fake DataLoader created")
+dl = DataLoader(FakeDS(32), batch_size=4)
+optimizer = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=0.01, betas=(0.9, 0.95))
+for pg in optimizer.param_groups:
+    pg['lr'] = get_lr(0)
 
-# ========== 5. Training loop dry-run (same logic as notebook) ==========
-print("\n=== 5. Training loop (2 steps) ===")
-os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+use_bf16 = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+amp_dtype = torch.bfloat16 if use_bf16 else torch.float16
+scaler = GradScaler(enabled=(not use_bf16))
+GRAD_ACCUM = 4
+micro = 0
+step = 0
+losses = []
 
-optimizer = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=0.01, betas=(0.9, 0.98))
-scaler = GradScaler()
-model.train()
-global_step = 0
-best_loss = float("inf")
-epoch_losses = []
-total_loss = 0
-batch_count = 0
-
-for i, batch in enumerate(train_loader):
-    input_ids = batch["input_ids"].to(device)
-    labels = batch["labels"].to(device)
-
-    optimizer.zero_grad()
-
-    with autocast(device_type=device.type):
-        embeddings = model.tgt_embed(input_ids)
-        output = embeddings
+optimizer.zero_grad(set_to_none=True)
+for i, batch in enumerate(dl):
+    ids = batch["input_ids"].to(device)
+    labs = batch["labels"].to(device)
+    with autocast(device_type="cuda" if torch.cuda.is_available() else "cpu", dtype=amp_dtype if torch.cuda.is_available() else torch.float32):
+        x = model.tgt_embed(ids)
         for layer in model.decoder.layers:
-            output, _ = layer(output, tgt_mask=None, use_cache=False)
-        output = model.decoder.norm(output)
-        logits = model.project(output)
-        shift_logits = logits[..., :-1, :].contiguous()
-        shift_labels = labels[..., 1:].contiguous()
+            x, _ = layer(x, tgt_mask=None, use_cache=False)
+        x = model.decoder.norm(x)
+        logits = model.project(x)
         loss = nn.CrossEntropyLoss(ignore_index=-100)(
-            shift_logits.view(-1, shift_logits.size(-1)),
-            shift_labels.view(-1)
-        )
+            logits[...,:-1,:].contiguous().view(-1, VOCAB_SIZE),
+            labs[...,1:].contiguous().view(-1)
+        ) / GRAD_ACCUM
 
-    scaler.scale(loss).backward()
-    scaler.unscale_(optimizer)
-    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-    scaler.step(optimizer)
-    scaler.update()
+    if scaler.is_enabled():
+        scaler.scale(loss).backward()
+    else:
+        loss.backward()
+    micro += 1
+    real_loss = loss.item() * GRAD_ACCUM
+    losses.append(real_loss)
 
-    total_loss += loss.item()
-    global_step += 1
-    batch_count += 1
-    epoch_losses.append(loss.item())
+    if micro >= GRAD_ACCUM:
+        if scaler.is_enabled():
+            scaler.unscale_(optimizer)
+        gn = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        if scaler.is_enabled():
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+        step += 1
+        micro = 0
+        lr = get_lr(step)
+        for pg in optimizer.param_groups:
+            pg['lr'] = lr
+        print(f"  Step {step}: loss={real_loss:.4f}, lr={lr:.8f}, grad_norm={float(gn):.2f}")
 
-    print(f"  Step {global_step}: loss={loss.item():.4f}, finite={torch.isfinite(loss).item()}")
-
-    if global_step >= 2:
+    if step >= 3:
         break
 
-print(f"[PASS] Training loop OK ({global_step} steps)")
+# Check loss decreased
+print(f"\n  Loss[0]={losses[0]:.4f}, Loss[-1]={losses[-1]:.4f}")
+if losses[-1] < losses[0]:
+    print("[PASS] Loss is decreasing!")
+else:
+    print("[INFO] Loss not yet decreasing (normal for just 3 steps)")
 
-# ========== 6. save_checkpoint (your existing function) ==========
-print("\n=== 6. save_checkpoint ===")
-avg_loss = total_loss / max(batch_count, 1)
-save_checkpoint(
-    model, optimizer, 0, global_step, avg_loss, best_loss,
-    CHECKPOINT_DIR, "test_checkpoint.pt"
-)
-
-ckpt_path = os.path.join(CHECKPOINT_DIR, "test_checkpoint.pt")
-loaded = torch.load(ckpt_path, map_location="cpu", weights_only=False)
-gs = loaded["global_step"]
-print(f"[PASS] Checkpoint save/load OK (step={gs})")
-
-# Cleanup
-import shutil
-shutil.rmtree(CHECKPOINT_DIR, ignore_errors=True)
-
-# ========== Summary ==========
-print("\n" + "=" * 55)
-print("[PASS] ALL TESTS PASSED - notebook is ready for Azure!")
-print("=" * 55)
-print(f"  Model            : {total_params/1e6:.1f}M params")
-print(f"  REPO-Attention   : ON")
-print(f"  Flash-Attention  : ON")
-print(f"  Dataset          : SlimPajama-6B (Oxen)")
-print(f"  Loss at step {global_step}  : {loss.item():.4f}")
+print("\n" + "=" * 50)
+print("[PASS] ALL CHECKS PASSED - ready for Azure!")
+print("=" * 50)

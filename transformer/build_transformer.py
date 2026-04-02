@@ -90,6 +90,11 @@ def build_transformer(
             else:
                 nn.init.xavier_uniform_(p, gain=1.0)
         else:
-            nn.init.zeros_(p)
+            # IMPORTANT: Don't zero out RMSNorm gamma — it must stay at ones
+            # Only zero out actual bias parameters
+            if 'gamma' in name or 'norm' in name:
+                nn.init.ones_(p)
+            else:
+                nn.init.zeros_(p)
 
     return transformer
