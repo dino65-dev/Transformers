@@ -118,6 +118,7 @@ class SlimPajamaDataset(IterableDataset):
         tokenize + chunk, and yield training samples.
         """
         import pyarrow.parquet as pq
+        import random
 
         worker_info = torch.utils.data.get_worker_info()
 
@@ -130,14 +131,34 @@ class SlimPajamaDataset(IterableDataset):
         else:
             files = self.parquet_files
 
+        buffer = []
+        buffer_size = 2000  # Will hold ~4M tokens in memory for deep chunk shuffling
+
         for pq_file in files:
             try:
                 table = pq.read_table(pq_file, columns=["text"])
                 texts = table.column("text").to_pylist()
 
+                # 1. Shuffle document order within the file
+                random.shuffle(texts) 
+
                 for text in texts:
                     if text and len(text.strip()) > 0:
-                        yield from self._tokenize_and_chunk(text)
+                        for chunk in self._tokenize_and_chunk(text):
+                            buffer.append(chunk)
+                            
+                            # 2. Shuffle chunks across different documents
+                            if len(buffer) >= buffer_size:
+                                idx = random.randrange(len(buffer))
+                                # Swap with last element and pop (O(1) pop)
+                                buffer[idx], buffer[-1] = buffer[-1], buffer[idx]
+                                yield buffer.pop()
+
             except Exception as e:
                 print(f"Warning: Error reading {pq_file}: {e}")
                 continue
+                
+        # 3. Yield remaining chunks in random order
+        random.shuffle(buffer)
+        for chunk in buffer:
+            yield chunk

@@ -205,3 +205,11 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Model checkpoints
+*.pt
+*.pth
+
+# Temp files
+_*
+
